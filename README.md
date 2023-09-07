@@ -35,3 +35,9 @@
 3. 手动跟踪到`package com.hpbr.apm.common.b;`的`static String a(byte[] bArr, String str, byte[] bArr2)`，这是核心的将二进制数据解为字符串的关键函数
 4. 发现使用的加密方法为`AES/CBC/PKCS5Padding`，但没有直观的找到密钥，使用frida来hook一下上面的函数，打印出第二个入参密钥、与返回结果
 5. 得到密钥为`YNEIVsMlw7bp7pfd`，在代码中也搜到了在`package com.hpbr.bosszhipin.manager.a.a;`中；返回结果为`{"code":0,"message":"Success","zpData":xxxx}`这样的格式
+6. 经检测，上面找到的加密只是apm相关接口的、如周期统计，业务相关的`batchRunV2`与`jobList`接口走的不是这个解密，大意了没有细筛（感觉也不应该这么简单）
+7. 根据`GeekF1GetJobListResponse`这个详细的业务类，找到`package com.twl.http.callback.b；`其中`a方法`为处理请求与响应，其中响应已经是明文，继续向上排查
+8. 找到`com.twl.http.callback.e`，其中`parseResponse方法`很像是最根的处理方法了，但响应内容仍是明文；怀疑对`okhttp`有中间操作，果然有一些`intercept`方法
+9. 在hook`net.bosszhipin.base.a`的`intercept方法`时，发现入的响应体为加密的二进制数据，出来的为明文string，继续深入
+10. 发现在`com.twl.signer.YZWG`的`decodeContentBytes`是解response方法，它是个`native`方法（共有7个native方法），核心逻辑封装在`libyzwg.so`动态库中
+11. 下面就是要逆向`libyzwg.so`，文件有`3.4MB`，用工具从内存dump还更大了一点儿。。。；目前用java封装成轻量server运行在手机上来说对我更容易（直接用frida包成server也能凑合用）
